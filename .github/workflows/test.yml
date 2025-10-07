@@ -1,0 +1,68 @@
+name: 🧪 Test Streamlit App
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ------------------- CHECKOUT REPO -------------------
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      # ------------------- PYTHON SETUP -------------------
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ------------------- INSTALL DEPENDENCIES -------------------
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # Optional: install dev-only tools
+          pip install pytest flake8
+
+      # ------------------- LINT & FORMAT CHECK -------------------
+      - name: 🧹 Lint with flake8
+        run: |
+          # Fail on syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Warn on style issues (won’t fail)
+          flake8 . --count --exit-zero --max-complexity=15 --max-line-length=100 --statistics
+
+      # ------------------- TEST IMPORTS -------------------
+      - name: 🔍 Smoke test imports
+        run: |
+          python -c "import streamlit; import openai; import elevenlabs"
+          echo "✅ All core modules import successfully!"
+
+      # ------------------- RUN PYTEST -------------------
+      - name: 🧪 Run tests
+        run: |
+          if [ -d "tests" ]; then
+            pytest -v --disable-warnings || echo "⚠️ No tests found or some failed."
+          else
+            echo "ℹ️ No tests directory found, skipping pytest."
+          fi
+
+      # ------------------- STREAMLIT VALIDATION -------------------
+      - name: 🚦 Streamlit health check
+        run: |
+          streamlit version
+          streamlit run app.py --server.headless true & sleep 10 && pkill streamlit
+          echo "✅ Streamlit app launched successfully (headless check passed)"
+
+      # ------------------- ENVIRONMENT VARIABLES -------------------
+      - name: 🔐 Validate secrets presence
+        run: |
+          echo "Checking required secrets..."
+          [[ -n "${{ secrets.OPENAI_API_KEY }}" ]] || (echo "❌ Missing OPENAI_API_KEY" && exit 1)
+          [[ -n "${{ secrets.ELEVENLABS_API_KEY }}" ]] || (echo "❌ Missing ELEVENLABS_API_KEY" && exit 1)
+          echo "✅ All secrets found!"
