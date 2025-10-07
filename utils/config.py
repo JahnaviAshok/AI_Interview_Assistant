@@ -1,0 +1,18 @@
+import os, streamlit as st
+
+def _get(name, default=None):
+    v = st.secrets.get(name, os.getenv(name, default))
+    return v.strip() if isinstance(v, str) else v
+
+OPENAI_API_KEY = _get("OPENAI_API_KEY")
+ELEVENLABS_API_KEY = _get("ELEVENLABS_API_KEY")
+ELEVENLABS_VOICE_ID = _get("ELEVENLABS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL")
+
+MONGODB_URI = "mongodb+srv://<user>:<pass>@<cluster>/app?retryWrites=true&w=majority"
+MONGODB_DB  = "interview_genaie"
+
+RECORDING_SAMPLE_RATE = 44100
+RECORDING_CHANNELS = 1
+RECORDING_DURATION_SECONDS = 10
+TEMP_AUDIO_FILENAME = "data/recordings/temp_user_response.wav"
+RESUME_MIN_TEXT_CHARS = 500
