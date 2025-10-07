@@ -21,6 +21,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: 🧰 Install system libs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsndfile1 ffmpeg
+
       # ------------------- INSTALL DEPENDENCIES -------------------
       - name: 📦 Install dependencies
         run: |
@@ -66,3 +71,15 @@ jobs:
           [[ -n "${{ secrets.OPENAI_API_KEY }}" ]] || (echo "❌ Missing OPENAI_API_KEY" && exit 1)
           [[ -n "${{ secrets.ELEVENLABS_API_KEY }}" ]] || (echo "❌ Missing ELEVENLABS_API_KEY" && exit 1)
           echo "✅ All secrets found!"
+
+      - name: 🚦 Streamlit health check
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        run: |
+          streamlit version
+          streamlit run app.py --server.headless true & sleep 10 && pkill streamlit
+          echo "✅ Streamlit app launched successfully (headless check passed)"
+
