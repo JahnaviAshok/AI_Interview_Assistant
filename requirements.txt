@@ -40,3 +40,7 @@ pymongo>=4.8.0
 # --- Dev / linting helpers ---
 black>=24.4.2
 ruff>=0.5.5
+
+faiss-cpu
+sentence-transformers
+tiktoken                  # optional (OpenAI embeddings path)

@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 from core.llm_service import generate_completion
 from core.feedback_generator import generate_feedback_and_scores
 from prompts.question_prompts import get_question_generation_prompt
+from core.rag_retriever import retrieve_context 
 
 
 class InterviewAgent:
@@ -27,13 +28,27 @@ class InterviewAgent:
 
     def _generate_questions(self, round_name: str, num_of_questions: int) -> List[str]:
         """
-        Uses your LLM service to create a list[str] of questions.
-        Robust parsing handles code fences and non-JSON outputs.
+        Uses RAG + LLM to create a list[str] of questions.
         """
-        prompt = get_question_generation_prompt(self.resume_text, round_name, num_of_questions)
-        raw = generate_completion(prompt, max_tokens=300 * num_of_questions, temperature=0.6)
+        # 🔍 1. Retrieve top-k context snippets
+        ctx_snips = retrieve_context(f"{round_name} interview questions", k=4)
+        ctx_block = "\n".join([f"- {c}" for c in ctx_snips]) or "(no context retrieved)"
 
-        # Strip ``` blocks if present
+        # 🔧 2. Build prompt (resume + retrieved context)
+        prompt = f"""
+            You are an interview question generator.
+            Use both the resume and retrieved context to create {num_of_questions} {round_name} questions.
+
+            Context (from RAG):
+            {ctx_block}
+
+            Resume:
+            {self.resume_text}
+
+            Return a Python list like ["Q1", "Q2", ...]
+            """
+        raw = generate_completion(prompt, max_tokens=300 * num_of_questions, temperature=0.6)
+         # Strip ``` blocks if present
         raw = re.sub(r"^```(?:python)?\s*|\s*```$", "", raw.strip(), flags=re.IGNORECASE)
 
         # Try to parse as Python list literal (e.g., ["Q1", "Q2", ...])
@@ -65,18 +80,24 @@ class InterviewAgent:
 
     def build_feedback(self, round_name: str, qa_pairs: List[Dict[str, str]]) -> Dict[str, Any]:
         """
-        Given a list of {'question': str, 'answer': str} pairs, call your feedback generator.
-        Stores and returns the feedback dict.
+        Given QA pairs, call feedback generator (now RAG-aware).
         """
         self.current_round_info = {"name": round_name, "num_questions": len(qa_pairs)}
         self.interview_history = qa_pairs
 
+        # 🔍 Retrieve resume context for these Qs
+        joined_questions = " ".join([qa["question"] for qa in qa_pairs])
+        ctx_snips = retrieve_context(joined_questions, k=4)
+        ctx_block = "\n".join([f"- {c}" for c in ctx_snips])
+
+        # 🧠 Pass extra context into feedback generator
         self.feedback = generate_feedback_and_scores(
-            resume_text=self.resume_text,
+            resume_text=self.resume_text + "\n\nRetrieved Context:\n" + ctx_block,
             round_name=round_name,
             qa_pairs=qa_pairs,
         )
         return self.feedback
+
 
     # ------------------------- Accessors / Utils -------------------------
 

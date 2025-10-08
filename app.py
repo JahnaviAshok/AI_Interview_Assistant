@@ -22,6 +22,8 @@ from utils import config
 from core.audio_io import speak_text_bytes, transcribe_audio_bytes, transcribe_audio
 
 from core.resume_parser import classify_document
+
+from core.rag_index import build_or_refresh_index
 # --- Mic widgets (optional) ---
 HAVE_MIC_RECORDER = False
 HAVE_AUDIO_RECORDER = False
@@ -396,8 +398,6 @@ def _ensure_more_questions(agent, round_name: str, batch: int = 5):
         ss.questions.extend([q for q in extra if q not in seen])
 
 
-
-
 # ---------- Stage 1: Upload ----------
 if ss.stage == "upload":
     st.header("Upload Your Resume")
@@ -434,8 +434,30 @@ if ss.stage == "upload":
                             "jd_signals": info.get("jd_signals"),
                         })
                     st.stop()  # stay on the upload page
-                
-                # ... after successful parse & validation ...
+
+                # ---------- NEW: Build/refresh the RAG index ----------
+                # (Imports here to keep top-level clean; move to file top if you prefer)
+                from core.rag_index import build_or_refresh_index
+                extra_docs = []
+
+                with st.expander("🔎 (Optional) Include a Job Description / Notes in RAG"):
+                    jd_text = st.text_area(
+                        "Paste JD / role notes (improves retrieval & tailoring)",
+                        placeholder="Paste job description here..."
+                    )
+                    if jd_text and len(jd_text.strip()) > 0:
+                        extra_docs.append(jd_text.strip())
+
+                with st.spinner("Building RAG index (resume + extras)..."):
+                    try:
+                        _ = build_or_refresh_index(ss.resume_text, extra_docs=extra_docs or None)
+                        ss.rag_ready = True
+                        st.success("RAG index built ✅ (tailored context will be used for Q&A).")
+                    except Exception as e:
+                        ss.rag_ready = False
+                        st.warning(f"RAG index build skipped due to: {e}")
+
+                # ---------- Name extraction / confirmation ----------
                 full_name, first_name = extract_candidate_name(ss.resume_text)
                 ss.candidate_name = full_name or ss.get("candidate_name") or ""
                 ss.candidate_first = first_name or (ss.candidate_name.split()[0] if ss.candidate_name else "")
@@ -444,6 +466,16 @@ if ss.stage == "upload":
                 ss.candidate_name = st.text_input("Confirm your name", value=ss.candidate_name).strip()
                 if ss.candidate_name:
                     ss.candidate_first = ss.candidate_name.split()[0].title()
+
+                # ---------- Debug: quick retrieval preview ----------
+                with st.expander("🧪 RAG debug (optional)"):
+                    from core.rag_retriever import retrieve_context
+                    q = st.text_input("Try a retrieval query", value="Generate data engineering interview questions")
+                    if st.button("Preview retrieved chunks"):
+                        ctx = retrieve_context(q, k=3)
+                        st.code("\n\n---\n".join(ctx) or "No context (index empty)")
+
+                # ---------- Initialize agent and advance ----------
                 try:
                     ss.interview_agent = InterviewAgent(ss.resume_text)
                     ss.stage = "select_round"
@@ -457,7 +489,6 @@ if ss.stage == "upload":
                 st.error("Could not extract text from the resume. Try a different file.")
                 _cleanup_file(ss.temp_resume_path)
                 ss.temp_resume_path = None
-
 
 # ---------- Stage 2: Select Round ----------
 if ss.stage == "select_round":
