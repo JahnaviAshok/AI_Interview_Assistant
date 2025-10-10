@@ -141,7 +141,7 @@ st.sidebar.markdown(
       </div>
       <div class="kv">
         <span>Source</span>
-        <span>🌐 <a href="https://github.com/BharathKalaleRaviprakash/Interview_GenAIe" target="_blank">GitHub</a></span>
+        <span>🌐 <a href="https://github.com/JahnaviAshok/AI_Interview_Assistant" target="_blank">GitHub</a></span>
       </div>
     </div>
     """,
